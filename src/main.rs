@@ -19,6 +19,7 @@ use player::Player;
 use std::f32::consts::PI;
 use textures::TextureManager;
 use enemy::Enemy;
+use crate::item::ItemState;
 
 use crate::{caster::cast_ray, player::process_events};
 
@@ -225,16 +226,26 @@ pub fn draw_item(
     let screen_x =
         (0.5 * framebuffer.width as f32) * (1.0 + angle_diff / (player.fov / 2.0));
 
-    // Tamaño del sprite según distancia
-    let size = (framebuffer.height as f32 / distance) * 150.0;
+    let base_size = (framebuffer.height as f32 / distance) * 80.0;
 
-    let half_size = size / 2.0;
-    let top = (framebuffer.height as f32 / 2.0 - half_size).max(0.0);
-    let bottom = (framebuffer.height as f32 / 2.0 + half_size)
+    //animación de rotación, se hace más estrecho según el angulo
+    let rotation_factor = (item.rotation_timer.cos() * 0.5 + 0.5).max(0.3); // Entre 0.3 y 1.0
+    let size_x = base_size * rotation_factor;
+    let size_y = base_size;
+
+    // APLICAR BOBBING
+    let bob_offset = item.get_bob_offset();
+    
+    let half_size_x = size_x / 2.0;
+    let half_size_y = size_y / 2.0;
+
+
+    let top = (framebuffer.height as f32 / 2.0 - half_size_y + bob_offset).max(0.0);
+    let bottom = (framebuffer.height as f32 / 2.0 + half_size_y + bob_offset)
         .min(framebuffer.height as f32);
 
-    let x_start = (screen_x - half_size).max(0.0) as i32;
-    let x_end = (screen_x + half_size).min(framebuffer.width as f32) as i32;
+    let x_start = (screen_x - half_size_x).max(0.0) as i32;
+    let x_end = (screen_x + half_size_x).min(framebuffer.width as f32) as i32;
 
     let xsize = x_end - x_start;
     if xsize <= 0 {
@@ -249,7 +260,7 @@ pub fn draw_item(
             let tx = ((x - x_start) as f32 / xsize as f32) * texture_size;
             let ty = ((y as f32 - top) / (bottom - top)) * texture_size;
 
-            let color = texture_manager.get_pixel_color(texture_key, tx as u32, ty as u32);
+            let mut color = texture_manager.get_pixel_color(texture_key, tx as u32, ty as u32);
 
             let pixel_u32 =
                 ((color.a as u32) << 24) |
@@ -262,8 +273,70 @@ pub fn draw_item(
                 continue;
             }
 
+            //  APLICAR ALPHA (transparencia para fade out)
+            color.a = (color.a as f32 * item.alpha) as u8;
+
             framebuffer.set_current_color(color);
             framebuffer.set_pixel(x, y);
+        }
+    }
+}
+
+// Dibujar texto en pantalla
+pub fn draw_text_centered(
+    framebuffer: &mut Framebuffer,
+    text: &str,
+    y: i32,
+    color: Color,
+    scale: usize,
+) {
+    // Fuente simple de 5x7 píxeles por carácter
+    let char_width = 6 * scale;
+    let text_width = text.len() * char_width;
+    let x_start = (framebuffer.width as i32 - text_width as i32) / 2;
+
+    framebuffer.set_current_color(color);
+
+    for (i, ch) in text.chars().enumerate() {
+        let x_offset = x_start + (i * char_width) as i32;
+        draw_char_simple(framebuffer, ch, x_offset, y, scale);
+    }
+}
+
+//  Dibujar un carácter simple
+fn draw_char_simple(framebuffer: &mut Framebuffer, ch: char, x: i32, y: i32, scale: usize) {
+    // Fuente bitmap simple (5x7 píxeles)
+    let patterns: &[u8] = match ch {
+        'P' => &[0x7C, 0x12, 0x12, 0x12, 0x0C],
+        'r' => &[0x00, 0x7C, 0x08, 0x04, 0x04],
+        'e' => &[0x38, 0x54, 0x54, 0x54, 0x18],
+        's' => &[0x48, 0x54, 0x54, 0x54, 0x24],
+        'i' => &[0x00, 0x44, 0x7D, 0x40, 0x00],
+        'o' => &[0x38, 0x44, 0x44, 0x44, 0x38],
+        'n' => &[0x7C, 0x08, 0x04, 0x04, 0x78],
+        'a' => &[0x20, 0x54, 0x54, 0x54, 0x78],
+        '"' => &[0x00, 0x07, 0x00, 0x07, 0x00],
+        'D' => &[0x7C, 0x44, 0x44, 0x44, 0x38],
+        'p' => &[0xFC, 0x24, 0x24, 0x24, 0x18],
+        'c' => &[0x38, 0x44, 0x44, 0x44, 0x28],
+        'g' => &[0x18, 0xA4, 0xA4, 0xA4, 0x7C],
+        'l' => &[0x00, 0x44, 0x7C, 0x40, 0x00],
+        ' ' => &[0x00, 0x00, 0x00, 0x00, 0x00],
+        _ => &[0x7C, 0x7C, 0x7C, 0x7C, 0x7C], // Cuadrado para caracteres no soportados
+    };
+
+    for (col, &pattern) in patterns.iter().enumerate() {
+        for row in 0..7 {
+            if (pattern >> row) & 1 == 1 {
+                for sx in 0..scale {
+                    for sy in 0..scale {
+                        framebuffer.set_pixel(
+                            x + (col * scale) as i32 + sx as i32,
+                            y + (row * scale) as i32 + sy as i32,
+                        );
+                    }
+                }
+            }
         }
     }
 }
@@ -273,20 +346,51 @@ pub fn render_items(
     player: &mut Player,
     items: &mut Vec<Item>,
     texture_manager: &TextureManager,
+    delta_time: f32,
+    window: &RaylibHandle,
 ) {
-    for item in items.iter_mut() {
-        // RECOLECCIÓN: si está pegado al jugador
-        let dx = item.pos.x - player.pos.x;
-        let dy = item.pos.y - player.pos.y;
+    let pickup_range = 50.0; // Distancia para mostrar el texto
+    let mut nearest_item: Option<usize> = None;
+    let mut nearest_distance = f32::MAX;
 
-        let distance = (dx * dx + dy * dy).sqrt();
+    for (idx, item) in items.iter_mut().enumerate() {
+        // ACTUALIZAR ANIMACIÓN
+        item.update(delta_time);
+        
+        if item.state == ItemState::Idle {
+            let dx = item.pos.x - player.pos.x;
+            let dy = item.pos.y - player.pos.y;
+            let distance = (dx * dx + dy * dy).sqrt();
 
-        if !item.collected && distance < 30.0 {
-            item.collected = true;
-            println!("Has recogido un ítem: {}", item.texture_key);
+            // Encontrar el item más cercano
+            if distance < pickup_range && distance < nearest_distance {
+                nearest_distance = distance;
+                nearest_item = Some(idx);
+            }
         }
 
         draw_item(framebuffer, player, item, texture_manager);
+    }
+
+    // MOSTRAR TEXTO Y MANEJAR RECOLECCIÓN
+    if let Some(idx) = nearest_item {
+        let item = &mut items[idx];
+        
+        // Dibujar texto "Presiona D para recoger [Item]"
+        let text = format!("Presiona \"D\" para recoger {}", item.name);
+        draw_text_centered(
+            framebuffer,
+            &text,
+            framebuffer.height - 100,
+            Color::new(255, 255, 255, 255),
+            2,
+        );
+
+        // DETECTAR TECLA D
+        if window.is_key_pressed(KeyboardKey::KEY_D) {
+            println!("¡Recogiendo {}!", item.name);
+            item.start_collecting();
+        }
     }
 }
 
@@ -319,8 +423,13 @@ fn main() {
         Item::new(1000.0, 800.0, 'h'), // poción
     ];
 
+    let mut last_time = std::time::Instant::now();
 
     while !window.window_should_close() {
+        let current_time = std::time::Instant::now();
+        let delta_time = (current_time - last_time).as_secs_f32();
+        last_time = current_time;
+
         framebuffer.clear();
         process_events(&window, &mut player, &maze);
         // 1. clear framebuffer
@@ -337,8 +446,15 @@ fn main() {
         else {
             render_world(&mut framebuffer,&player,&maze,&texture_cache);
 
-            render_items(&mut framebuffer, &mut player, &mut items, &texture_cache);
-            render_enemies(&mut framebuffer,&player,&texture_cache);
+            render_items(
+                &mut framebuffer,
+                &mut player,
+                &mut items,
+                &texture_cache,
+                delta_time,
+                &window,
+            );
+            //render_enemies(&mut framebuffer,&player,&texture_cache);
         }
 
         
