@@ -5,18 +5,23 @@ use std::slice;
 pub struct TextureManager {
     images: HashMap<char, Image>,       // Store images for pixel access
     textures: HashMap<char, Texture2D>, // Store GPU textures for rendering
+    dimensions: HashMap<char, (u32, u32)>,
 }
  
 impl TextureManager {
     pub fn new(rl: &mut RaylibHandle, thread: &RaylibThread) -> Self {
         let mut images = HashMap::new();
         let mut textures = HashMap::new();
+        let mut dimensions = HashMap::new();
 
         // Map characters to texture file paths
         let texture_files = vec![
             // ('+', "assets/wall4.png"),
             // ('-', "assets/wall2.png"),
-            ('|', "assets/redstone_lamp_on.png"),
+            ('+', "assets/fondoV.png"),
+            ('|', "assets/fondo1.png"),
+            ('-', "assets/fondo1.png"),
+
             ('b', "assets/furnace_front_off.png"),
             ('c', "assets/redstone_lamp_on.png"),
             ('h', "assets/furnace_front_off.png"),
@@ -27,7 +32,11 @@ impl TextureManager {
           for (ch, path) in texture_files {
             match Image::load_image(path) {
                 Ok(image) => {
-                    println!("Cargada imagen para '{}': {}", ch, path);
+                    let width = image.width as u32;
+                    let height = image.height as u32;
+                    println!("Cargada imagen para '{}': {} ({}x{})", ch, path, width, height);
+
+                    dimensions.insert(ch, (width, height));
                     let texture = rl.load_texture(thread, path).expect(&format!("Failed to load texture {}", path));
                     images.insert(ch, image);
                     textures.insert(ch, texture);
@@ -38,7 +47,7 @@ impl TextureManager {
             }
         }
 
-        TextureManager { images, textures }
+        TextureManager { images, textures, dimensions }
     }
 
     pub fn get_pixel_color(&self, ch: char, tx: u32, ty: u32) -> Color {
@@ -54,6 +63,22 @@ impl TextureManager {
     pub fn get_texture(&self, ch: char) -> Option<&Texture2D> {
         self.textures.get(&ch)
     }
+
+    pub fn get_dimensions(&self, ch: char) -> (u32, u32) {
+        self.dimensions.get(&ch).copied().unwrap_or((128, 128))
+    }
+
+   
+    pub fn get_width(&self, ch: char) -> u32 {
+        self.get_dimensions(ch).0
+    }
+
+    // ✨ NUEVA: Obtener alto
+    pub fn get_height(&self, ch: char) -> u32 {
+        self.get_dimensions(ch).1
+    }
+
+    
 
     pub fn is_pixel_transparent(&self, _texture_key: u32, color: u32) -> bool {
         let alpha = (color >> 24) & 0xFF;

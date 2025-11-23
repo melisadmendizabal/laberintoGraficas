@@ -7,12 +7,14 @@ pub struct Framebuffer{
     background_color:Color,
     current_color:Color,
     pixel_data: Vec<Color>,
+    pub z_buffer: Vec<f32>,
 }
 
 impl Framebuffer {
     pub fn new(width: i32, height: i32, background_color:Color) -> Self{
         let size = (width * height) as usize;
         let pixel_data = vec![background_color; size];
+        let z_buffer = vec![f32::INFINITY; size];
         let color_buffer = Image::gen_image_color(width,height,background_color);
         Framebuffer{
             width,
@@ -20,12 +22,14 @@ impl Framebuffer {
             color_buffer,
             background_color,
             current_color: Color::WHITE,
-            pixel_data
+            pixel_data,
+            z_buffer,
         }
     }
 
     pub fn clear(&mut self){
         self.pixel_data.fill(self.background_color);
+        self.z_buffer.fill(f32::INFINITY);
         self.color_buffer = Image::gen_image_color(self.width,self.height,self.background_color)
     }
 
@@ -34,6 +38,19 @@ impl Framebuffer {
             let index = (y * self.width + x) as usize;
             self.pixel_data[index] = self.current_color;
             Image::draw_pixel(&mut self.color_buffer, x as i32, y as i32, self.current_color);
+        }
+    }
+
+    pub fn set_pixel_with_depth(&mut self, x: i32, y: i32, depth: f32) {
+        if x >= 0 && x < self.width && y >= 0 && y < self.height {
+            let index = (y * self.width + x) as usize;
+            
+            // Solo dibujar si este píxel está más cerca que lo que ya está
+            if depth < self.z_buffer[index] {
+                self.z_buffer[index] = depth;
+                self.pixel_data[index] = self.current_color;
+                Image::draw_pixel(&mut self.color_buffer, x as i32, y as i32, self.current_color);
+            }
         }
     }
 

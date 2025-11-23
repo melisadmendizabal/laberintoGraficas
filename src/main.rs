@@ -20,6 +20,8 @@ use std::f32::consts::PI;
 use textures::TextureManager;
 use enemy::Enemy;
 use crate::item::ItemState;
+use crate::Vector2;
+use crate::maze::find_char_position;
 
 use crate::{caster::cast_ray, player::process_events};
 
@@ -95,28 +97,52 @@ pub fn render_world(framebuffer:&mut Framebuffer, player: &Player,maze:&Maze, te
             distance_to_wall = 0.2;
             // continue; 
         }
-        let stake_height = (hh/distance_to_wall) *70.0;
+        //altura de la pared
+        let stake_height = (hh/distance_to_wall) * 150.0;
         
 
         let stake_top = (hh - (stake_height / 2.0)).max(0.0) as usize;
         let stake_bottom = (hh + (stake_height / 2.0)).min(framebuffer.height as f32) as usize;
-        let texture_size = 16.0;
+
+        // DIBUJAR TECHO (desde arriba hasta donde empieza la pared)
+        for y in 0..stake_top {
+            let gradient = 1.0 -(y as f32 / stake_bottom as f32) ;
+            let r = (24.0 + gradient * 50.0) as u8;
+            let g = (98.0 + gradient * 20.0) as u8;
+            let b = (98.0 + gradient * 20.0) as u8;
+            framebuffer.set_current_color(Color::new(r, g, b, 255));
+            framebuffer.set_pixel(i, y as i32);
+        }
+
+        //dibujar pared
+        let (texture_width, texture_height) = texture_cache.get_dimensions(c);
+        let texture_width = texture_width as f32;
+        let texture_height = texture_height as f32;
         
 
-        for y in stake_top..stake_bottom{
-            
+        for y in stake_top..stake_bottom {
+            let tx = (intersect.tx * texture_width) as u32;
+            let ty = ((y as f32 - stake_top as f32) / (stake_bottom as f32 - stake_top as f32) 
+                     * texture_height) as u32;
 
-            let tx = intersect.tx as f32 * (texture_size / 6.0);
-            let ty = (y as f32 - stake_top as f32) / (stake_bottom as f32 - stake_top as f32) * texture_size;
+            let tx = tx.min(texture_width as u32 - 1);
+            let ty = ty.min(texture_height as u32 - 1);
 
-            let color = texture_cache.get_pixel_color(c, tx as u32, ty as u32);
+            let color = texture_cache.get_pixel_color(c, tx, ty);
             framebuffer.set_current_color(color);
-            // match c {
-            //     '|' => framebuffer.set_current_color(color),
-            //     _ => framebuffer.set_current_color(Color::new(255, 255, 255, 255)), 
-            // }
-            framebuffer.set_pixel(i, y as i32);
+            framebuffer.set_pixel_with_depth(i, y as i32, distance_to_wall);
+        }
 
+        // DIBUJAR PISO (desde donde termina la pared hasta abajo)
+        let floor_start = stake_bottom;
+        let floor_end = framebuffer.height as usize;
+        for y in floor_start..floor_end {
+            let gradient = (floor_end - y ) as f32 / (floor_end - floor_start) as f32;
+            let r = (176.0 - gradient * 30.0) as u8;
+            let g = (151.0 - gradient * 30.0) as u8;
+            let b = (95.0 - gradient * 50.0) as u8;
+            framebuffer.set_current_color(Color::new(r, g, b, 255));
+            framebuffer.set_pixel(i, y as i32);
         }
 
     }
@@ -236,8 +262,8 @@ pub fn draw_item(
     // APLICAR BOBBING
     let bob_offset = item.get_bob_offset();
     
-    let half_size_x = size_x / 2.0;
-    let half_size_y = size_y / 2.0;
+    let half_size_x = size_x / 5.0;
+    let half_size_y = size_y / 5.0;
 
 
     let top = (framebuffer.height as f32 / 2.0 - half_size_y + bob_offset).max(0.0);
@@ -253,12 +279,14 @@ pub fn draw_item(
     }
 
     let texture_key = item.texture_key;
-    let texture_size = 16.0;
+    let (texture_width, texture_height) = texture_manager.get_dimensions(texture_key);
+    let texture_width = texture_width as f32;
+    let texture_height = texture_height as f32;
 
     for x in x_start..x_end {
         for y in top as i32..bottom as i32 {
-            let tx = ((x - x_start) as f32 / xsize as f32) * texture_size;
-            let ty = ((y as f32 - top) / (bottom - top)) * texture_size;
+            let tx = ((x - x_start) as f32 / xsize as f32) * texture_width;
+            let ty = ((y as f32 - top) / (bottom - top)) * texture_height;
 
             let mut color = texture_manager.get_pixel_color(texture_key, tx as u32, ty as u32);
 
@@ -268,16 +296,14 @@ pub fn draw_item(
                 ((color.g as u32) << 8)  |
                 (color.b as u32);
 
-
             if texture_manager.is_pixel_transparent(texture_key as u32, pixel_u32) {
                 continue;
             }
 
-            //  APLICAR ALPHA (transparencia para fade out)
             color.a = (color.a as f32 * item.alpha) as u8;
 
             framebuffer.set_current_color(color);
-            framebuffer.set_pixel(x, y);
+            framebuffer.set_pixel_with_depth(x, y, distance);
         }
     }
 }
@@ -622,8 +648,20 @@ fn main() {
     framebuffer.set_background_color(Color::new(50, 50, 100, 255));
 
     // Load the maze once before the loop
-    let maze = load_maze("./maze.txt");
-    let mut player = Player{pos:(Vector2::new(180.0,180.0)), a: PI/3.0, fov: PI/2.0 };
+    let maze = load_maze("./mazeOrca.txt");
+
+    let spawn_position = find_char_position(&maze, 'i', block_size)
+        .unwrap_or(Vector2::new(180.0, 180.0)); // Fallback por si no encuentra 'i'
+    
+    println!("🎮 Spawneando en posición: ({}, {})", spawn_position.x, spawn_position.y);
+
+
+    let mut player = Player {
+        pos: spawn_position,
+        a: PI / 3.0,
+        fov: PI / 2.0,
+    };
+
     let texture_cache = TextureManager::new(&mut window, &raylib_thread);
 
     let mut items = vec![

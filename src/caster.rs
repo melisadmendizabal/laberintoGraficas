@@ -9,10 +9,17 @@ use crate::maze::Maze;
 pub struct Intersect {
     pub distance: f32,
     pub impact:char,
-    pub tx: usize,
+    pub tx: f32,
 }
 
-pub fn cast_ray(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, a: f32, block_size: usize, draw_line: bool) -> Intersect {
+pub fn cast_ray(
+    framebuffer: &mut Framebuffer,
+     maze: &Maze, 
+     player: &Player, 
+     a: f32, 
+     block_size: usize, 
+     draw_line: bool
+) -> Intersect {
     let mut d = 0.0;
     let maze_height = maze.len();
     let maze_width = if maze_height > 0 { maze[0].len() } else { 0 };
@@ -33,12 +40,13 @@ pub fn cast_ray(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, a: 
         if j >= maze_height || i >= maze_width {
         let hitx = x - i*block_size;
         let hity = y - j * block_size;
-        let mut maxhit = hity; 
+        let mut maxhit = hity as f32; 
 
         if 1 <hitx && hitx < block_size -1 {
-            maxhit = hitx;
+            maxhit = hitx as f32;
         }
-        let tx = (maxhit  * 6 )/block_size as usize;
+
+        let tx = maxhit /block_size as f32;
 
             return Intersect {
                 distance: d,
@@ -48,15 +56,23 @@ pub fn cast_ray(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, a: 
         }
 
         let cell = maze[j][i];
-        if cell != ' ' && cell != 'b' && cell != 'c' && cell != 'h' && cell != 'g' {
+        if cell != ' ' && cell != 'b' && cell != 'c' && cell != 'h' && cell != 'g' && cell != 'i' {
             let hitx = x - i * block_size;
             let hity = y - j * block_size;
-            let mut maxhit = hity; 
-
-            if 1 < hitx && hitx < block_size - 1 {
-                maxhit = hitx;
-            }
-            let tx = (maxhit * 6) / block_size; 
+            let maxhit = if hitx.abs_diff(0) < hitx.abs_diff(block_size) && 
+                           hitx.abs_diff(0) < hity.abs_diff(0) && 
+                           hitx.abs_diff(0) < hity.abs_diff(block_size) {
+                hity as f32
+            } else if hitx.abs_diff(block_size) < hity.abs_diff(0) && 
+                      hitx.abs_diff(block_size) < hity.abs_diff(block_size) {
+                hity as f32
+            } else if hity.abs_diff(0) < hity.abs_diff(block_size) {
+                hitx as f32
+            } else {
+                hitx as f32
+            };
+           
+            let tx = maxhit / block_size as f32;
 
             return Intersect {
                 distance: d,
@@ -81,7 +97,7 @@ pub fn cast_ray(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, a: 
     Intersect {
         distance: d,
         impact: ' ', // ''
-        tx: 0
+        tx: 0.0
     }
 }
  

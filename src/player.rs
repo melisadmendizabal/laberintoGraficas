@@ -41,7 +41,8 @@ pub fn process_events(window: &RaylibHandle, player: &mut Player, maze: &Maze) {
         && maze.get(j).and_then(|row| row.get(i)) != Some(&'g')
         && maze.get(j).and_then(|row| row.get(i)) != Some(&'b')
         && maze.get(j).and_then(|row| row.get(i)) != Some(&'c')
-        && maze.get(j).and_then(|row| row.get(i)) != Some(&'h') {
+        && maze.get(j).and_then(|row| row.get(i)) != Some(&'h')
+        && maze.get(j).and_then(|row| row.get(i)) != Some(&'i') {
         return; 
     }
 
