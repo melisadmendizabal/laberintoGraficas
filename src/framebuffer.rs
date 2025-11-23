@@ -1,45 +1,52 @@
 use raylib::prelude::*;
-use raylib::color::Color;
 
-pub struct Framebuffer {
-    pub width: u32,
-    pub height: u32,
-    pub color_buffer: Image, //guarda los pixeles
-    background_color: Color, //color de fondo para limpiar
-    current_color: Color, //color actual
+pub struct Framebuffer{
+    pub width:i32,
+    pub height:i32,
+    pub color_buffer: Image,
+    background_color:Color,
+    current_color:Color,
+    pixel_data: Vec<Color>,
 }
 
 impl Framebuffer {
-    pub fn new(width: u32, height: u32, background_color: Color) -> Self {
-        let color_buffer = Image::gen_image_color(width as i32, height as i32, background_color);
-        Framebuffer {
+    pub fn new(width: i32, height: i32, background_color:Color) -> Self{
+        let size = (width * height) as usize;
+        let pixel_data = vec![background_color; size];
+        let color_buffer = Image::gen_image_color(width,height,background_color);
+        Framebuffer{
             width,
             height,
             color_buffer,
             background_color,
             current_color: Color::WHITE,
+            pixel_data
         }
     }
 
-    pub fn clear(&mut self) { //limpia su buffer de colores
-        self.color_buffer = Image::gen_image_color(self.width as i32, self.height as i32, self.background_color); 
+    pub fn clear(&mut self){
+        self.pixel_data.fill(self.background_color);
+        self.color_buffer = Image::gen_image_color(self.width,self.height,self.background_color)
     }
 
-    pub fn set_pixel(&mut self, x: u32, y: u32) {//poner un pixel que no se salga de la pantalla
-        if x < self.width && y < self.height {
+    pub fn set_pixel(&mut self, x:i32, y:i32){
+        if x >= 0 && x < self.width && y >= 0 && y < self.height {
+            let index = (y * self.width + x) as usize;
+            self.pixel_data[index] = self.current_color;
             Image::draw_pixel(&mut self.color_buffer, x as i32, y as i32, self.current_color);
         }
     }
 
-    pub fn set_background_color(&mut self, color: Color){ //settear el color de fondo
-        self.background_color= color;
+    pub fn set_background_color(&mut self, color:Color){
+        self.background_color = color;
+        self.clear();
     }
 
-    pub fn set_current_color(&mut self, color: Color) {//setear el color
+    pub fn set_current_color(&mut self, color:Color){
         self.current_color = color;
     }
 
-    pub fn render_to_file(&self, file_path: &str){
+    pub fn render_to_file(&self, file_path:&str){
         Image::export_image(&self.color_buffer, file_path);
     }
 
@@ -49,5 +56,14 @@ impl Framebuffer {
             renderer.draw_texture(&texture,0,0,Color::WHITE);
         }
     }
-    
+
+    pub fn get_pixel_color(&self, x: i32, y: i32) -> Option<Color> {
+        if x >= 0 && x < self.width && y >= 0 && y < self.height {
+            let index = (y * self.width + x) as usize;
+            Some(self.pixel_data[index])
+        } else {
+            None
+        }
+    }
+
 }
