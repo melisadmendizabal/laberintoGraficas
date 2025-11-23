@@ -16,7 +16,10 @@ impl TextureManager {
         let texture_files = vec![
             // ('+', "assets/wall4.png"),
             // ('-', "assets/wall2.png"),
-            ('|', "assets/wallPaint.png"),
+            ('|', "assets/redstone_lamp_on.png"),
+            ('b', "assets/furnace_front_off.png"),
+            ('c', "assets/redstone_lamp_on.png"),
+            ('h', "assets/furnace_front_off.png"),
             // ('g', "assets/wall5.png"),
             // ('#', "assets/wall3.png"), // default/fallback
         ];
@@ -50,6 +53,11 @@ impl TextureManager {
 
     pub fn get_texture(&self, ch: char) -> Option<&Texture2D> {
         self.textures.get(&ch)
+    }
+
+    pub fn is_pixel_transparent(&self, _texture_key: u32, color: u32) -> bool {
+        let alpha = (color >> 24) & 0xFF;
+        alpha < 10
     }
 }
 

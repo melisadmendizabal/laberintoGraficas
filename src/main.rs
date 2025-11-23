@@ -7,7 +7,9 @@ mod player;
 mod caster;
 mod textures;
 mod enemy;
+mod item;
 
+use item::Item;
 use raylib::prelude::*;
 use std::thread;
 use std::time::Duration;
@@ -97,13 +99,16 @@ pub fn render_world(framebuffer:&mut Framebuffer, player: &Player,maze:&Maze, te
 
         let stake_top = (hh - (stake_height / 2.0)).max(0.0) as usize;
         let stake_bottom = (hh + (stake_height / 2.0)).min(framebuffer.height as f32) as usize;
+        let texture_size = 16.0;
         
 
         for y in stake_top..stake_bottom{
-            let tx = intersect.tx;
-            let ty = (y as f32 -stake_top as f32 ) / (stake_bottom as f32  - stake_top as f32 ) *6.0;
+            
 
-            let color = texture_cache.get_pixel_color(c,tx as u32, ty as u32);
+            let tx = intersect.tx as f32 * (texture_size / 6.0);
+            let ty = (y as f32 - stake_top as f32) / (stake_bottom as f32 - stake_top as f32) * texture_size;
+
+            let color = texture_cache.get_pixel_color(c, tx as u32, ty as u32);
             framebuffer.set_current_color(color);
             // match c {
             //     '|' => framebuffer.set_current_color(color),
@@ -171,6 +176,8 @@ fn draw_sprite(
 }
 
 
+
+
 fn render_enemies(framebuffer:&mut Framebuffer, player: &Player, texture_cache: &TextureManager){
     let enemies = vec![
         Enemy::new(250.0, 250.0, 'e')
@@ -179,6 +186,112 @@ fn render_enemies(framebuffer:&mut Framebuffer, player: &Player, texture_cache: 
         draw_sprite(framebuffer, &player, &enemy, texture_cache);
     }
 }
+
+
+pub fn draw_item(
+    framebuffer: &mut Framebuffer,
+    player: &Player,
+    item: &Item,
+    texture_manager: &TextureManager,
+) {
+    if item.collected {
+        return;
+    }
+
+    let dx = item.pos.x - player.pos.x;
+    let dy = item.pos.y - player.pos.y;
+
+    // Distancia al jugador
+    let distance = (dx * dx + dy * dy).sqrt();
+
+    // Ángulo hacia el ítem
+    let angle_to_item = dy.atan2(dx);
+    let mut angle_diff = angle_to_item - player.a;
+
+    // Normalización del ángulo
+    while angle_diff > std::f32::consts::PI {
+        angle_diff -= 2.0 * std::f32::consts::PI;
+    }
+    while angle_diff < -std::f32::consts::PI {
+        angle_diff += 2.0 * std::f32::consts::PI;
+    }
+
+    // Ítem fuera del campo de visión
+    if angle_diff.abs() > player.fov / 2.0 {
+        return;
+    }
+
+    // Proyección en pantalla
+    let screen_x =
+        (0.5 * framebuffer.width as f32) * (1.0 + angle_diff / (player.fov / 2.0));
+
+    // Tamaño del sprite según distancia
+    let size = (framebuffer.height as f32 / distance) * 150.0;
+
+    let half_size = size / 2.0;
+    let top = (framebuffer.height as f32 / 2.0 - half_size).max(0.0);
+    let bottom = (framebuffer.height as f32 / 2.0 + half_size)
+        .min(framebuffer.height as f32);
+
+    let x_start = (screen_x - half_size).max(0.0) as i32;
+    let x_end = (screen_x + half_size).min(framebuffer.width as f32) as i32;
+
+    let xsize = x_end - x_start;
+    if xsize <= 0 {
+        return;
+    }
+
+    let texture_key = item.texture_key;
+    let texture_size = 16.0;
+
+    for x in x_start..x_end {
+        for y in top as i32..bottom as i32 {
+            let tx = ((x - x_start) as f32 / xsize as f32) * texture_size;
+            let ty = ((y as f32 - top) / (bottom - top)) * texture_size;
+
+            let color = texture_manager.get_pixel_color(texture_key, tx as u32, ty as u32);
+
+            let pixel_u32 =
+                ((color.a as u32) << 24) |
+                ((color.r as u32) << 16) |
+                ((color.g as u32) << 8)  |
+                (color.b as u32);
+
+
+            if texture_manager.is_pixel_transparent(texture_key as u32, pixel_u32) {
+                continue;
+            }
+
+            framebuffer.set_current_color(color);
+            framebuffer.set_pixel(x, y);
+        }
+    }
+}
+
+pub fn render_items(
+    framebuffer: &mut Framebuffer,
+    player: &mut Player,
+    items: &mut Vec<Item>,
+    texture_manager: &TextureManager,
+) {
+    for item in items.iter_mut() {
+        // RECOLECCIÓN: si está pegado al jugador
+        let dx = item.pos.x - player.pos.x;
+        let dy = item.pos.y - player.pos.y;
+
+        let distance = (dx * dx + dy * dy).sqrt();
+
+        if !item.collected && distance < 30.0 {
+            item.collected = true;
+            println!("Has recogido un ítem: {}", item.texture_key);
+        }
+
+        draw_item(framebuffer, player, item, texture_manager);
+    }
+}
+
+
+
 
 fn main() {
     let window_width = 1300;
@@ -200,6 +313,13 @@ fn main() {
     let mut player = Player{pos:(Vector2::new(180.0,180.0)), a: PI/3.0, fov: PI/2.0 };
     let texture_cache = TextureManager::new(&mut window, &raylib_thread);
 
+    let mut items = vec![
+        Item::new(400.0, 350.0, 'b'), // llave azul
+        Item::new(700.0, 300.0, 'c'), // moneda
+        Item::new(1000.0, 800.0, 'h'), // poción
+    ];
+
+
     while !window.window_should_close() {
         framebuffer.clear();
         process_events(&window, &mut player, &maze);
@@ -216,6 +336,8 @@ fn main() {
         }
         else {
             render_world(&mut framebuffer,&player,&maze,&texture_cache);
+
+            render_items(&mut framebuffer, &mut player, &mut items, &texture_cache);
             render_enemies(&mut framebuffer,&player,&texture_cache);
         }
 

@@ -47,20 +47,21 @@ pub fn cast_ray(framebuffer: &mut Framebuffer, maze: &Maze, player: &Player, a: 
             };
         }
 
-        if maze[j][i] != ' ' {
-        let hitx = x - i*block_size;
-        let hity = y - j * block_size;
-        let mut maxhit = hity; 
+        let cell = maze[j][i];
+        if cell != ' ' && cell != 'b' && cell != 'c' && cell != 'h' && cell != 'g' {
+            let hitx = x - i * block_size;
+            let hity = y - j * block_size;
+            let mut maxhit = hity; 
 
-        if 1 <hitx && hitx < block_size -1 {
-            maxhit = hitx;
-        }
-        let tx = maxhit  * (6/block_size);
+            if 1 < hitx && hitx < block_size - 1 {
+                maxhit = hitx;
+            }
+            let tx = (maxhit * 6) / block_size; 
 
             return Intersect {
                 distance: d,
-                impact: maze[j][i],  // Pared encontrada
-                tx:tx
+                impact: maze[j][i],
+                tx: tx
             };
         }
 
