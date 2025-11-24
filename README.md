@@ -56,9 +56,27 @@ En el juego:
 Las imagenes restantes están más abajo.
 
 ---
+
+## Características
+- **Motor de Raycasting 3D**: Implementación completa de raycasting con texturas mapeadas
+- **Sistema de texturas**: Carga dinámica de texturas para paredes, items y mapas
+- **Fog of War**: Efecto de niebla basado en distancia para atmósfera inmersiva
+- **Minimapa en tiempo real**: Muestra la posición del jugador, items y estructura del laberinto
+- **3 Mapas**: Cada uno con temática diferente (Colibrí, Orca, Vaca)
+- **Sistema de recolección**: Encuentra 3 fragmentos del mapa en cada nivel
+- **Mecánica de restauración**: Repara el mapa roto al completar la colección
+- **Inventario visual**: Visualiza los items recolectados en la interfaz
+- **Animaciones fluidas**: 
+  - Bobbing (flotación) de items
+  - Rotación dinámica
+  - Fade-out al recoger
+
+
+---
 ## Condiciones de entrega
 Consideré que 
 - Por llevar control de la vida de su jugador = El inventario de items.
+
 ---
 ## Requisitos
 - Rust
