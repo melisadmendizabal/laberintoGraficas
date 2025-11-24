@@ -1,10 +1,13 @@
+//texture.rs
+
 use raylib::prelude::*;
 use std::collections::HashMap;
 use std::slice;
+use crate::menu::ItemConfig;
 
 pub struct TextureManager {
-    images: HashMap<char, Image>,       // Store images for pixel access
-    textures: HashMap<char, Texture2D>, // Store GPU textures for rendering
+    images: HashMap<char, Image>,
+    textures: HashMap<char, Texture2D>,
     dimensions: HashMap<char, (u32, u32)>,
 }
  
@@ -14,22 +17,13 @@ impl TextureManager {
         let mut textures = HashMap::new();
         let mut dimensions = HashMap::new();
 
-        // Map characters to texture file paths
         let texture_files = vec![
-            // ('+', "assets/wall4.png"),
-            // ('-', "assets/wall2.png"),
             ('+', "assets/fondoV.png"),
             ('|', "assets/fondo1.png"),
             ('-', "assets/fondo1.png"),
-
-            ('b', "assets/furnace_front_off.png"),
-            ('c', "assets/redstone_lamp_on.png"),
-            ('h', "assets/furnace_front_off.png"),
-            // ('g', "assets/wall5.png"),
-            // ('#', "assets/wall3.png"), // default/fallback
         ];
 
-          for (ch, path) in texture_files {
+        for (ch, path) in texture_files {
             match Image::load_image(path) {
                 Ok(image) => {
                     let width = image.width as u32;
@@ -37,7 +31,8 @@ impl TextureManager {
                     println!("Cargada imagen para '{}': {} ({}x{})", ch, path, width, height);
 
                     dimensions.insert(ch, (width, height));
-                    let texture = rl.load_texture(thread, path).expect(&format!("Failed to load texture {}", path));
+                    let texture = rl.load_texture(thread, path)
+                        .expect(&format!("Failed to load texture {}", path));
                     images.insert(ch, image);
                     textures.insert(ch, texture);
                 }
@@ -48,6 +43,90 @@ impl TextureManager {
         }
 
         TextureManager { images, textures, dimensions }
+    }
+
+    pub fn load_map_textures(
+        &mut self,
+        rl: &mut RaylibHandle,
+        thread: &RaylibThread,
+        broken_path: &str,
+        fixed_path: &str,
+    ) {
+        // Cargar textura rota ('*')
+        match Image::load_image(broken_path) {
+            Ok(image) => {
+                let width = image.width as u32;
+                let height = image.height as u32;
+                println!("✨ Cargada textura mapa ROTO '*': {} ({}x{})", broken_path, width, height);
+
+                self.dimensions.insert('*', (width, height));
+                if let Ok(texture) = rl.load_texture(thread, broken_path) {
+                    self.images.insert('*', image);
+                    self.textures.insert('*', texture);
+                }
+            }
+            Err(e) => {
+                eprintln!("❌ Error cargando mapa roto: {}", e);
+            }
+        }
+
+        // Cargar textura completa ('$')
+        match Image::load_image(fixed_path) {
+            Ok(image) => {
+                let width = image.width as u32;
+                let height = image.height as u32;
+                println!("✨ Cargada textura mapa COMPLETO '$': {} ({}x{})", fixed_path, width, height);
+
+                self.dimensions.insert('$', (width, height));
+                if let Ok(texture) = rl.load_texture(thread, fixed_path) {
+                    self.images.insert('$', image);
+                    self.textures.insert('$', texture);
+                }
+            }
+            Err(e) => {
+                eprintln!("❌ Error cargando mapa completo: {}", e);
+            }
+        }
+    }
+
+    pub fn load_item_textures(
+        &mut self,
+        rl: &mut RaylibHandle,
+        thread: &RaylibThread,
+        item_configs: &[ItemConfig],
+    ) {
+        for config in item_configs {
+            let ch = config.texture_key;
+            let path = &config.texture_path;
+
+            if self.images.contains_key(&ch) {
+                println!("⚠️ Textura '{}' ya cargada, saltando...", ch);
+                continue;
+            }
+
+            match Image::load_image(path) {
+                Ok(image) => {
+                    let width = image.width as u32;
+                    let height = image.height as u32;
+                    println!("✨ Cargada textura item '{}': {} ({}x{})", ch, path, width, height);
+
+                    self.dimensions.insert(ch, (width, height));
+                    
+                    match rl.load_texture(thread, path) {
+                        Ok(texture) => {
+                            self.images.insert(ch, image);
+                            self.textures.insert(ch, texture);
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Error cargando textura GPU '{}': {}", ch, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Error cargando imagen item '{}' ({}): {}", ch, path, e);
+                }
+            }
+        }
     }
 
     pub fn get_pixel_color(&self, ch: char, tx: u32, ty: u32) -> Color {
@@ -68,17 +147,13 @@ impl TextureManager {
         self.dimensions.get(&ch).copied().unwrap_or((128, 128))
     }
 
-   
     pub fn get_width(&self, ch: char) -> u32 {
         self.get_dimensions(ch).0
     }
 
-    // ✨ NUEVA: Obtener alto
     pub fn get_height(&self, ch: char) -> u32 {
         self.get_dimensions(ch).1
     }
-
-    
 
     pub fn is_pixel_transparent(&self, _texture_key: u32, color: u32) -> bool {
         let alpha = (color >> 24) & 0xFF;
@@ -101,7 +176,6 @@ fn get_pixel_color(image: &Image, x: i32, y: i32) -> Color {
 
     unsafe {
         let data = slice::from_raw_parts(image.data as *const u8, data_len);
-
         let idx = (y * width + x) * 4;
 
         if idx + 3 >= data_len {

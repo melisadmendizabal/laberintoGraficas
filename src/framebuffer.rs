@@ -1,3 +1,5 @@
+//framebuffer.rs
+
 use raylib::prelude::*;
 
 pub struct Framebuffer{

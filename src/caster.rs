@@ -1,7 +1,8 @@
+//caster.rs
 use std::hint;
 
 use raylib::color::Color;
-
+use crate::SpecialWall;
 use crate::framebuffer::Framebuffer;
 use crate::player::Player;
 use crate::maze::Maze;
@@ -18,7 +19,8 @@ pub fn cast_ray(
      player: &Player, 
      a: f32, 
      block_size: usize, 
-     draw_line: bool
+     draw_line: bool,
+     special_wall: Option<&SpecialWall>,
 ) -> Intersect {
     let mut d = 0.0;
     let maze_height = maze.len();
@@ -55,8 +57,16 @@ pub fn cast_ray(
             };
         }
 
-        let cell = maze[j][i];
-        if cell != ' ' && cell != 'b' && cell != 'c' && cell != 'h' && cell != 'g' && cell != 'i' {
+        let mut cell = maze[j][i];
+
+        if cell == '*' {
+            if let Some(wall) = special_wall {
+                cell = wall.get_texture_key(); // Devuelve '*' o '$'
+            }
+        }
+
+    
+        if cell != ' ' && cell != 'b' && cell != 'c' && cell != 'h'  && cell != 'i' {
             let hitx = x - i * block_size;
             let hity = y - j * block_size;
             let maxhit = if hitx.abs_diff(0) < hitx.abs_diff(block_size) && 
@@ -76,7 +86,7 @@ pub fn cast_ray(
 
             return Intersect {
                 distance: d,
-                impact: maze[j][i],
+                impact: cell,
                 tx: tx
             };
         }
